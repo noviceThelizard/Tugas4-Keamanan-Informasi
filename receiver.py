@@ -1,6 +1,8 @@
 import socket
-import rsa
+import rsas
 import des
+import pickle
+import hashlib
 
 host = "localhost"
 port = 80
@@ -9,51 +11,27 @@ def handle_client_connection(client_socket, addr):
     """Handle a single client connection."""
     print(f"Got a connection from {addr}")
     base, modulus = 2, 19
-    e, d, n = rsa.generateKeys()
+    
+    e,d,n = 3452821,6720421,7266359
 
-    recv_key = client_socket.recv(1024).decode()
-    print(f"[Server] Received Key: {recv_key}")
+    signed_blocks = pickle.loads(client_socket.recv(1024))
+    message = client_socket.recv(1024)
+    print("message received:", message.decode())
+    verification_result = rsas.verify(signed_blocks, e, n, hashlib.sha256(message).hexdigest())
 
-    recv_key = int(recv_key)
-    send_key = base**d%modulus
+    decrypted_blocks = [
+        rsas.decrypt_block(signed_block, e, n) for signed_block in signed_blocks
+    ]
+    decrypted_message = "".join(decrypted_blocks)
 
-    client_socket.send(str(send_key).encode("utf-8"))
-    print(f"[Server] Sending key: {send_key}")
-
-    shared_key = des.padding(str(recv_key**d%modulus))
-    print(f"[Server] Shared key created: {shared_key}")
-    key_bin = des.str_to_bin(shared_key)
-    keys = des.keygen(key_bin)
-
-    msg = []
-    length = client_socket.recv(1024).decode()
-    length = int(length)
-    for i in range(0,length):
-        msg.append(client_socket.recv(1024).decode())
-
-    bin = []
-    for i in msg:
-        bin.append(des.str_to_bin(i)[:64])
-
-    encrypted = []
-    for i in bin:
-        encrypted.append(des.encrypt(i, keys))
-
-    decrypted = []
-    for i in encrypted:
-        print(des.bin_to_hex(i))
-        decrypted.append(des.decrypt(i, keys))
-
-    for i in decrypted:
-        print(des.bin_to_str(i))
-
-    # close socket
+    print("hashed message", hashlib.sha256(message).hexdigest())
+    print("signed message", decrypted_message)
+    print("verification result: ",verification_result)
+    
     client_socket.close()
 
 def main():
     key = "12345678"
-
-    
 
     key_bin = des.str_to_bin(key)
 
